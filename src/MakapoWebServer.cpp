@@ -3,48 +3,48 @@
 #include <ArduinoJson.h>
 #include <uri/UriBraces.h>
 
-//Implementation of constructor
+// Implementation of constructor
 MakapoWebServer::MakapoWebServer(PaddlerDataBuffer& buffer)
-    :server(80), dataBuffer(buffer)
+    : server(80), dataBuffer(buffer)
 {
 }
 
 void MakapoWebServer::begin() {
-  server.on("/", HTTP_GET, [this]() { handleRoot(); });
+  server.on("/", HTTP_GET, [this]() {
+    handleRoot();
+  });
 
-  server.on(UriBraces("{}/{}"), HTTP_GET, [this](){
-    //toInt() returns 0 if argument is not an integer
+  server.on(UriBraces("{}/{}"), HTTP_GET, [this]() {
     int paddlerId = server.pathArg(0).toInt();
 
-    if(!validId(paddlerId) || paddlerId <= 0){
+    if (!validId(paddlerId) || paddlerId <= 0) {
       handleNotFound("Invalid Paddler Id");
+      return;
     }
 
-    String dataRequested = server.pathArg(1); 
+    String dataRequested = server.pathArg(1);
 
     if (dataRequested == "paddlerData") {
-        handlePaddlerData(paddlerId);
+      handlePaddlerData(paddlerId);
     }
     else if (dataRequested == "speed") {
-        handleSpeed(paddlerId);
+      handleSpeed(paddlerId);
     }
     else if (dataRequested == "location") {
-        handleLocation(paddlerId);
+      handleLocation(paddlerId);
     }
     else if (dataRequested == "strokeRate") {
-        handleStrokeRate(paddlerId);
+      handleStrokeRate(paddlerId);
     }
     else if (dataRequested == "avgStrokeForce") {
-        handleAvgStrokeForce(paddlerId);
+      handleAvgStrokeForce(paddlerId);
     }
     else {
-        handleNotFound();
+      handleNotFound("This endpoint doesn't exist");
     }
-
   });
 
   server.begin();
-
 }
 
 void MakapoWebServer::handleClient() {
@@ -57,7 +57,8 @@ void MakapoWebServer::handleRoot() {
 
 void MakapoWebServer::handleSpeed(int id) {
   StaticJsonDocument<128> doc;
-  doc["speed"] = dataBuffer.getPaddlerDataById(id).speed;
+  doc["paddlerId"] = id;
+  doc["speed"] = 2.5;
 
   String body;
   serializeJson(doc, body);
@@ -66,7 +67,8 @@ void MakapoWebServer::handleSpeed(int id) {
 
 void MakapoWebServer::handleLocation(int id) {
   StaticJsonDocument<128> doc;
-  doc["location"] = dataBuffer.getPaddlerDataById(id).location;
+  doc["paddlerId"] = id;
+  doc["location"] = "X,Y";
 
   String body;
   serializeJson(doc, body);
@@ -75,7 +77,8 @@ void MakapoWebServer::handleLocation(int id) {
 
 void MakapoWebServer::handleStrokeRate(int id) {
   StaticJsonDocument<128> doc;
-  doc["strokeRate"] = dataBuffer.getPaddlerDataById(id).strokeRate;
+  doc["paddlerId"] = id;
+  doc["strokeRate"] = 30;
 
   String body;
   serializeJson(doc, body);
@@ -84,7 +87,8 @@ void MakapoWebServer::handleStrokeRate(int id) {
 
 void MakapoWebServer::handleAvgStrokeForce(int id) {
   StaticJsonDocument<128> doc;
-  doc["avgStrokeForce"] = dataBuffer.getPaddlerDataById(id).avgStrokeForce;
+  doc["paddlerId"] = id;
+  doc["avgStrokeForce"] = 45;
 
   String body;
   serializeJson(doc, body);
@@ -92,24 +96,24 @@ void MakapoWebServer::handleAvgStrokeForce(int id) {
 }
 
 void MakapoWebServer::handlePaddlerData(int id) {
-  StaticJsonDocument<512> doc;
-  PaddlerData data = dataBuffer.getPaddlerDataById(id);
+  StaticJsonDocument<256> doc;
 
-  doc["speed"] = data.speed;
-  doc["location"] = data.location;
-  doc["strokeRate"] = data.strokeRate;
-  doc["avgStrokeForce"] = data.avgStrokeForce;
+  doc["paddlerId"] = id;
+  doc["speed"] = 2.5;
+  doc["location"] = "X,Y";
+  doc["strokeRate"] = 30;
+  doc["avgStrokeForce"] = 45;
 
   String body;
   serializeJson(doc, body);
   server.send(200, "application/json", body);
 }
 
-bool MakapoWebServer::validId(int paddlerId){
-  return true;
+bool MakapoWebServer::validId(int paddlerId) {
+  return paddlerId > 0;
 }
 
-void MakapoWebServer::handleNotFound(String error = "This endpoint doesn't exist") {
+void MakapoWebServer::handleNotFound(String error) {
   StaticJsonDocument<128> doc;
   doc["error"] = error;
 

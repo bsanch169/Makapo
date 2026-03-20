@@ -1,5 +1,5 @@
 #pragma once
-#include <stddef.h> 
+#include <stddef.h>
 
 //The type we will use is a PaddlerData struct
 template <typename T, size_t capacity>
@@ -42,12 +42,11 @@ public:
     head = 0;
     tail = 0;
     count = 0;
-    buffer = T[capacity];
   }
-
+  
 private:
   T buffer[capacity];
   size_t head = 0;
-  size_t tail = 0;  
+  size_t tail = 0;
   size_t count = 0;
 };
