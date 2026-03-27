@@ -2,7 +2,7 @@
 # include <Arduino.h>
 # include <heltec_unofficial.h> //shorthand display/radio init, radiolib functions
 
-# include "RawPackets.h"
+# include "RawPacket.h"
 
 //transmitter initialization
 static float FREQ = 915.0;
@@ -14,56 +14,60 @@ static uint16_t PREAM_LEN = 8;
 
 //has receive / transmit been completed?
 volatile bool operationDone = false;
-
 void operationFlag(){ operationDone = true; }
-
-RawPacket* packet;
 
 //status code saved after recieve/transmit; if != 0, error occured
 int radioStatus = RADIOLIB_ERR_NONE;
+
+//assuming hardcoded data like boatID and paddlerCount
+uint8_t boatID = 1;
+uint8_t pCount = 3; //mode, so 0=1, 1=2, 2=4, 3=6
+uint8_t senStatus = 0;
+uint8_t boatStatus = 0;
+
+//testing: send a packet every second
+long transmissionDelay = 3000; //in ms
+long lastTransmission = 0;
+uint8_t counter = 0;
+uint8_t* payload;
 
 //function prototypes
 void display_start();
 void setupLoRa();
 void printToDisplay(const char* a, const char* b = nullptr, const char* c = nullptr);
-size_t getPacketLength(RawPacket* packet);
-void displayPacket(RawPacket* packet);
-uint8_t* packetToBytes(RawPacket* packet);
+uint8_t* prepData();
+size_t getPacketLength();
+void initRandomSeed();
 
 void setup(){
 	heltec_setup();
 	display_start();
+	initRandomSeed(); //from RawPackets.cpp
 
 	printToDisplay("Board setup success, setting up LoRa...");
 
 	setupLoRa();
-	radioStatus = radio.explicitHeader();
-	radio.setDio1Action(operationFlag);
+	radio.explicitHeader(); /* Sets explicit header for packets (usually default but just in case) */
+	radio.setCRC(2); /* Sets 2 byte payload CRC for packet */
+	radio.setDio1Action(operationFlag); /* interrupt method on radio action completion i.e transmit/receive/etc */
 	
 	if(radioStatus == RADIOLIB_ERR_NONE){
 		//Just transmit one packet for now.	
 		printToDisplay("Generating Random Packet...");
-		packet = generatePacket(random(1,7));
-
-		if(!packet){
-			printToDisplay("Packet Gen Error!");
-			while(true) { delay(10); }
-		}
+		payload = prepData();
 		
-		printToDisplay("Packet created, preparing for transmit...");
-		uint8_t* payload = packetToBytes(packet);
 		if(payload == nullptr){
-			printToDisplay("Failed to convert packet to payload!");
+			printToDisplay("ERROR: Could not generate data!");
 			while(true) { delay(10); }
 		}
 
-		size_t packetLen = getPacketLength(packet);
-
-		radioStatus = radio.startTransmit(payload, packetLen);
+		size_t payloadLen = getPacketLength();
+		radioStatus = radio.startTransmit(payload, payloadLen);
 		
 		if(radioStatus == RADIOLIB_ERR_NONE) {
-			printToDisplay("Packet Transmitted Successfully");
-			free(payload);
+			printToDisplay("Transmitted Successfully");
+			counter++;
+			lastTransmission = millis();
 		}
 		else{
 			char errBuf[16];
@@ -77,14 +81,26 @@ void setup(){
 void loop(){
 	heltec_loop();
 
+	//non-blocking, send a packet at set delay (3 seconds rn)
+	if(millis() - lastTransmission > transmissionDelay){
+		payload = prepData();
+	
+		if(payload == nullptr){
+			printToDisplay("ERROR: Transmission Data Could Not be Generated!");
+			while(true) { delay(10); } 
+		}
+		size_t payloadLen = getPacketLength();
+		radioStatus = radio.startTransmit(payload, payloadLen);
+	}
+
 	if(operationDone){
 		operationDone = false;
 		if(radioStatus == RADIOLIB_ERR_NONE){
-			printToDisplay("Transmission success!, cleaning up...");
-			radioStatus = radio.finishTransmit();
-
-			printToDisplay("Starting Packet Display Loop...");
-			displayPacket(packet);
+			lastTransmission = millis();
+			char tCount[12];
+			snprintf(tCount, sizeof(tCount), "%u", ++counter);
+			printToDisplay("Packets Transmitted: ", tCount);
+			free(payload);
 		}
 		else{
 			char errBuf[16];
@@ -110,7 +126,6 @@ void printToDisplay(const char* a, const char* b, const char* c){
 
 	display.display();
 
-	delay(500);
 }
 
 void setupLoRa(){
@@ -140,9 +155,10 @@ void display_start(){
 	display.display();
 }
 
-//definitely refine the position finding later...
-uint8_t* packetToBytes(RawPacket* packet){
-	size_t len = getPacketLength(packet);
+uint8_t* prepData(){
+
+	//make buffer 
+	size_t len = getPacketLength();
 	uint8_t* buffer = (uint8_t*)malloc(len);	
 	if(buffer == nullptr) {
 		heltec_led(30);
@@ -150,51 +166,35 @@ uint8_t* packetToBytes(RawPacket* packet){
 		return nullptr;
 	}
 
-	buffer[0] = packet->boatID;
-	memcpy(buffer + 1, &packet->timestamp, sizeof(float));
-	buffer[5] = packet->direction;
-	memcpy(buffer + 6, &packet->coordLat, sizeof(float));
-	memcpy(buffer + 10, &packet->coordLong, sizeof(float));
-	memcpy(buffer + 14, &packet->speed, sizeof(float));
-	buffer[18] = packet->pCount;
+	buffer[0] = packHeader(boatID, pCount, senStatus, boatStatus);
+	float coordLat = random(0, 64001) / 10.0f;
+	float coordLon = random(0, 64001) / 10.0f;
+	memcpy(buffer + 1, &coordLat, sizeof(float));
+	memcpy(buffer + 5, &coordLon, sizeof(float));
+	buffer[9] = random(0, 255);
 
-	uint8_t count = packet->pCount;
-	uint8_t offset = 19;
-	for(int i = 0; i < count; i++){
-		buffer[offset++] = packet->paddlers[i].paddlerID;
-		buffer[offset++] = packet->paddlers[i].paddleAngle;
-		buffer[offset++] = packet->paddlers[i].paddleVelocity;
-		buffer[offset++] = packet->paddlers[i].paddlePressure;
+	uint8_t offset = 10; 
+	
+	/* 	0000 + 1 = 1
+		0001 << 0010 = 2
+		0010 << 0100 = 4
+		0011 << 0110 = 6   */
+	uint8_t paddlers = pCount < 1 ? (pCount << 1) + 1 : pCount << 1;
+	for(int i = 0; i < paddlers; i++){
+		buffer[offset++] = random(1,7); //paddler ID
+		buffer[offset++] = random(0,255); //paddle angle
+		buffer[offset++] = random(0,255); //paddle velocity
+		buffer[offset++] = random(0,255); //paddle pressure
+		buffer[offset++] = random(0,255); //strokerate
 	}
 	return buffer;
 }
 
-size_t getPacketLength(RawPacket* packet){
-	return 19 + (size_t)packet->pCount * 4;
+size_t getPacketLength(){
+	uint8_t paddlers = pCount < 1 ? (pCount << 1) + 1 : pCount << 1;
+	return 10 + (size_t)paddlers * 5; // header + boatdata + count * 5
 }
 
-void displayPacket(RawPacket* packet){
-	char a[32], b[32], c[32];
-
-	while(true){
-		snprintf(a, sizeof(a), "boatID: %u", packet->boatID);
-		snprintf(b, sizeof(b), "ts: %.3f", packet->timestamp);
-		snprintf(c, sizeof(c), "dir: %u", packet->direction);
-		printToDisplay(a,b,c);
-		delay(3000);
-
-		snprintf(a, sizeof(a), "lat: %.3f", packet->coordLat);
-		snprintf(b, sizeof(b), "lon: %.3f", packet->coordLong);
-		snprintf(c, sizeof(c), "spd: %.2f", packet->speed);
-		printToDisplay(a,b,c);
-		delay(3000);
-
-		for(uint8_t i = 0; i < packet->pCount; i++){
-			snprintf(a, sizeof(a), "P%u id: %u", i, packet->paddlers[i].paddlerID);
-			snprintf(b, sizeof(b), "ang: %u vel %u", packet->paddlers[i].paddleAngle, packet->paddlers[i].paddleVelocity);
-			snprintf(c, sizeof(c), "pres: %u", packet->paddlers[i].paddlePressure);
-			printToDisplay(a,b,c);
-			delay(3000);	
-		}
-	}
+void initRandomSeed(){
+	randomSeed(esp_random() ^ millis() ^ micros());
 }
