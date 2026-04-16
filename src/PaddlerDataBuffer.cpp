@@ -1,37 +1,40 @@
 #include "PaddlerDataBuffer.h"
-#include "RingBuffer.h"
 
 PaddlerDataBuffer::PaddlerDataBuffer() {
+  numCanoes = 0;
+  for (size_t i = 0; i < MAX_CANOES; ++i) {
+    hasLatest[i] = false;
+  }
 }
 
-PaddlerData PaddlerDataBuffer::getPaddlerDataById(int id) {
-    PaddlerData data;
-    data.paddlerId = id;
+bool PaddlerDataBuffer::hasData(uint8_t boatId) {
+  if (boatId >= MAX_CANOES) return false;
+  return hasLatest[boatId];
+}
 
-    if (id == 1) {
-        data.speed = 4.8;
-        data.location = "Lane 1";
-        data.strokeRate = 32;
-        data.avgStrokeForce = 78;
-    } 
-    else if (id == 2) {
-        data.speed = 5.3;
-        data.location = "Lane 2";
-        data.strokeRate = 35;
-        data.avgStrokeForce = 84;
-    } 
-    else if (id == 3) {
-        data.speed = 4.5;
-        data.location = "Lane 3";
-        data.strokeRate = 29;
-        data.avgStrokeForce = 73;
-    } 
-    else {
-        data.speed = 3.9;
-        data.location = "Unknown";
-        data.strokeRate = 25;
-        data.avgStrokeForce = 65;
+bool PaddlerDataBuffer::addBoatData(uint8_t boatId, float speed, float longitude, float latitude,
+                                    PaddlerData* paddlerData, uint8_t paddlerCount) {
+
+  latestState[boatId].boatId = boatId;
+  latestState[boatId].speed = speed;
+  latestState[boatId].longitude = longitude;
+  latestState[boatId].latitude = latitude;
+
+  if (paddlerData != nullptr) {
+    for (int i = 0; i < paddlerCount; i++) {
+      latestState[boatId].paddlerData[i] = paddlerData[i];
     }
+  }
 
-    return data;
+  if (!hasLatest[boatId]) {
+    hasLatest[boatId] = true;
+    ++numCanoes;
+  }
+}
+
+bool PaddlerDataBuffer::getLatestBoatData(uint8_t boatId, BoatData& out) {
+  if (!hasData(boatId)) return false;
+  if (!hasLatest[boatId]) return false;
+
+  return true;
 }

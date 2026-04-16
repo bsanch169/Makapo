@@ -1,6 +1,8 @@
+#include <Arduino.h>
 #include <WiFi.h>
 #include "MakapoWebServer.h"
 #include "PaddlerDataBuffer.h"
+#include "heltec_unofficial.h"
 
 const char* ssid = "Makapo";
 const char* password = "123456789";
