@@ -19,10 +19,10 @@ RawPacket* storeData(RawPacket** live, uint8_t* buffer, uint8_t bufSize){
 	uint8_t count = encCount < 1 ? 1 : encCount << 1;
 
 	//validate buffer size matches expected count
-	if(	!((bufSize == 15 && count == 1) || 
-	    (bufSize == 20 && count == 2) || 
-	    (bufSize == 30 && count == 4) || 
-	    (bufSize == 40 && count == 6))) return nullptr;
+	if(	!((bufSize == 17 && count == 1) || 
+	    (bufSize == 22 && count == 2) || 
+	    (bufSize == 32 && count == 4) || 
+	    (bufSize == 42 && count == 6))) return nullptr;
 
 	
 	if(live[boatID] != nullptr){
@@ -30,12 +30,13 @@ RawPacket* storeData(RawPacket** live, uint8_t* buffer, uint8_t bufSize){
 		RawPacket* update = live[boatID];
 
 		//ensure size of data recv (pCount) = current packet size
-		if(bufSize != (10 + 5 * update->headByte)) return nullptr; //!! 
+		if(bufSize != (12 + 5 * update->headByte)) return nullptr; //!! 
 		
 		//update boat data
 		memcpy(&update->coordLat, buffer + 1, sizeof(float));
 		memcpy(&update->coordLon, buffer + 5, sizeof(float));
 		update->speed = buffer[9];
+		memcpy(&update->videoID, buffer + 9, sizeof(uint16_t));
 	
 		//update paddler data
 		uint8_t offset = 10;
@@ -60,6 +61,7 @@ RawPacket* storeData(RawPacket** live, uint8_t* buffer, uint8_t bufSize){
 		memcpy(&nBoat->coordLat, buffer + 1, sizeof(float));
 		memcpy(&nBoat->coordLon, buffer + 5, sizeof(float));
 		nBoat->speed = buffer[9];
+		memcpy(&nBoat->videoID, buffer + 9, sizeof(uint16_t));
 	
 		//store paddler data
 		uint8_t offset = 10;

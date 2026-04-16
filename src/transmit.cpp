@@ -24,6 +24,7 @@ uint8_t boatID = 1;
 uint8_t pCount = 3; //mode, so 0=1, 1=2, 2=4, 3=6
 uint8_t senStatus = 0;
 uint8_t boatStatus = 0;
+uint16_t videoID = 999;
 
 //testing: send a packet every second
 long transmissionDelay = 3000; //in ms
@@ -172,8 +173,9 @@ uint8_t* prepData(){
 	memcpy(buffer + 1, &coordLat, sizeof(float));
 	memcpy(buffer + 5, &coordLon, sizeof(float));
 	buffer[9] = random(0, 255);
+	memcpy(buffer + 9, &videoID, sizeof(uint16_t));
 
-	uint8_t offset = 10; 
+	uint8_t offset = 12; 
 	
 	/* 	0000 + 1 = 1
 		0001 << 0010 = 2
@@ -192,7 +194,7 @@ uint8_t* prepData(){
 
 size_t getPacketLength(){
 	uint8_t paddlers = pCount < 1 ? (pCount << 1) + 1 : pCount << 1;
-	return 10 + (size_t)paddlers * 5; // header + boatdata + count * 5
+	return 12 + (size_t)paddlers * 5; // header + boatdata + count * 5
 }
 
 void initRandomSeed(){

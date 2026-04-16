@@ -22,16 +22,17 @@
  *		CoordLat @ Byte[1-4]
  *		CoordLong @ Byte[5-8]
  *		Speed @ Byte[9]
- * 	Paddler Data begins at Byte[10]
- * 	5 Byte Length[10-15] -> 5 * N bytes total;
- * 		PaddlerID @ Byte[10]
- * 		PaddleAngle @ Byte[11]
- * 		PaddleVelocity @ Byte[12]
- * 		PaddlePressure @ Byte[13]
- * 		StrokeRate @ Byte[14]
+ *		VideoID @ Byte[10-11]
+ * 	Paddler Data begins at Byte[12]
+ * 	5 Byte Length[12-16] -> 5 * N bytes total;
+ * 		PaddlerID @ Byte[12]
+ * 		PaddleAngle @ Byte[13]
+ * 		PaddleVelocity @ Byte[14]
+ * 		PaddlePressure @ Byte[15]
+ * 		StrokeRate @ Byte[16]
  *
- *  Paddlers unused, packet is 10 bytes
- * 	Once paddle integrated, packet is 15 bytes min - 40 bytes max
+ *  Paddlers unused, packet is 12 bytes
+ * 	Once paddle integrated, packet is 17 bytes min - 40 bytes max
  */
 
 /* 
@@ -83,8 +84,9 @@ struct RawPacket {	/* float - 32 bits (4 bytes); 9 bytes total boatData */
 	float coordLat;
 	float coordLon;
 	uint8_t speed;
+	uint16_t videoID;
 
-	Paddler paddlers[]; // comment out or just say 1 null paddler until paddle sensor team has deliverable
+	Paddler paddlers[]; // comment out or just null paddler until sensor team has deliverable
 };
 
 // scaled integers for coord / angle?
