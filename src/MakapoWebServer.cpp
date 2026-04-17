@@ -3,114 +3,130 @@
 #include <ArduinoJson.h>
 #include <uri/UriBraces.h>
 
-// Implementation of constructor
 MakapoWebServer::MakapoWebServer(PaddlerDataBuffer& buffer)
-    : server(80), dataBuffer(buffer)
-{
+    : server(80), dataBuffer(buffer) {
 }
 
 void MakapoWebServer::begin() {
-  server.on("/", HTTP_GET, [this]() {
-    handleRoot();
-  });
+  server.on("/", HTTP_GET, [this]() { handleRoot(); });
 
+  // {boatId}/{boatData}
   server.on(UriBraces("{}/{}"), HTTP_GET, [this]() {
-    int paddlerId = server.pathArg(0).toInt();
-
-    if (!validId(paddlerId) || paddlerId <= 0) {
-      handleNotFound("Invalid Paddler Id");
-      return;
-    }
-
+    uint8_t boatID = server.pathArg(0).toInt();
     String dataRequested = server.pathArg(1);
 
-    if (dataRequested == "paddlerData") {
-      handlePaddlerData(paddlerId);
-    }
-    else if (dataRequested == "speed") {
-      handleSpeed(paddlerId);
-    }
-    else if (dataRequested == "location") {
-      handleLocation(paddlerId);
-    }
-    else if (dataRequested == "strokeRate") {
-      handleStrokeRate(paddlerId);
-    }
-    else if (dataRequested == "avgStrokeForce") {
-      handleAvgStrokeForce(paddlerId);
+    if (!dataBuffer.hasData(boatID)) {
+      handleNotFound("Invalid Boat ID, or no data from this boat yet");
+      return;
+    } 
+
+    if (dataRequested == "boatData") {
+      handleBoatData(boatID);
     }
     else {
       handleNotFound("This endpoint doesn't exist");
     }
   });
 
+  // /{boatId}//{paddlerId}/{paddlerData}
+  server.on(UriBraces("{}/{}/{}"), HTTP_GET, [this]() {
+    uint8_t boatID = server.pathArg(0).toInt();
+    String dataRequested = server.pathArg(1);
+    uint8_t paddlerID = server.pathArg(2).toInt();
+
+    if (!dataBuffer.hasData(boatID)) {
+      handleNotFound("Invalid Boat ID, or no data from this boat yet");
+      return;
+    }
+
+    if (dataRequested == "paddlerData") {
+      handlePaddlerData(boatID, paddlerID);
+    }
+    else {
+      handleNotFound("The endpoint " + dataRequested + " doesn't exist");
+    }
+  });
+
   server.begin();
 }
+
 
 void MakapoWebServer::handleClient() {
   server.handleClient();
 }
-
 void MakapoWebServer::handleRoot() {
   server.send(200, "text/plain", "REST API for Makapo");
 }
 
-void MakapoWebServer::handleSpeed(int id) {
-  StaticJsonDocument<128> doc;
-  doc["paddlerId"] = id;
-  doc["speed"] = 2.5;
+void MakapoWebServer::handleBoatData(uint8_t boatId) {
+  BoatData data;
+  
+  if (!(dataBuffer.getLatestBoatData(boatId, data))) {
+    handleNotFound("No data found for this boat");
+    return;
+  }
+
+  StaticJsonDocument<2048> doc;
+  doc["boatID"] = data.boatID;
+  doc["paddlerCount"] = data.paddlerCount;
+  doc["senStatus"] = data.senStatus;
+  doc["boatStatus"] = data.boatStatus;
+
+  doc["speed"] = data.speed;
+  doc["lat"] = data.coordLat;
+  doc["long"] = data.coordLon;
+  doc["videoID"] = data.videoID;
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             
+  JsonArray paddlers = doc.createNestedArray("paddlers");
+  for (size_t i = 0; i < data.paddlerCount; i++) {
+    JsonObject p = paddlers.createNestedObject();
+    p["paddlerId"] = data.paddlers[i].paddlerID;
+    p["paddleAng"] = data.paddlers[i].paddleAng;
+    p["paddleVel"] = data.paddlers[i].paddleVel;
+    p["paddlePres"] = data.paddlers[i].paddlePres;
+    p["strokeRate"] = data.paddlers[i].strokeRate;
+  }
 
   String body;
   serializeJson(doc, body);
   server.send(200, "application/json", body);
 }
 
-void MakapoWebServer::handleLocation(int id) {
-  StaticJsonDocument<128> doc;
-  doc["paddlerId"] = id;
-  doc["location"] = "X,Y";
+void MakapoWebServer::handlePaddlerData(uint8_t boatID, uint8_t paddlerID) {
+  BoatData data; 
 
-  String body;
-  serializeJson(doc, body);
-  server.send(200, "application/json", body);
-}
+  if (!dataBuffer.getLatestBoatData(boatID, data)) {
+    handleNotFound("No data found for this boat");
+    return;
+  }
 
-void MakapoWebServer::handleStrokeRate(int id) {
-  StaticJsonDocument<128> doc;
-  doc["paddlerId"] = id;
-  doc["strokeRate"] = 30;
+  bool found = false;
+  PaddlerData paddler;
 
-  String body;
-  serializeJson(doc, body);
-  server.send(200, "application/json", body);
-}
+  for (size_t i = 0; i < data.paddlerCount; i++) {
+    if (data.paddlers[i].paddlerID == paddlerID) {
+      paddler = data.paddlers[i];
+      found = true;
+      break;
+    }
+  }
 
-void MakapoWebServer::handleAvgStrokeForce(int id) {
-  StaticJsonDocument<128> doc;
-  doc["paddlerId"] = id;
-  doc["avgStrokeForce"] = 45;
+  if (!found) {
+    handleNotFound("Paddler not found for this boat");
+    return;
+  }
 
-  String body;
-  serializeJson(doc, body);
-  server.send(200, "application/json", body);
-}
-
-void MakapoWebServer::handlePaddlerData(int id) {
   StaticJsonDocument<256> doc;
-
-  doc["paddlerId"] = id;
-  doc["speed"] = 2.5;
-  doc["location"] = "X,Y";
-  doc["strokeRate"] = 30;
-  doc["avgStrokeForce"] = 45;
+  doc["boatID"] = boatID;
+  doc["paddlerID"] = paddlerID;
+  doc["paddleAng"] = paddler.paddleAng;
+  doc["paddleVel"] = paddler.paddleVel;
+  doc["paddlePres"] = paddler.paddlePres;
+  doc["strokeRate"] = paddler.strokeRate;
 
   String body;
   serializeJson(doc, body);
   server.send(200, "application/json", body);
-}
-
-bool MakapoWebServer::validId(int paddlerId) {
-  return paddlerId > 0;
 }
 
 void MakapoWebServer::handleNotFound(String error) {

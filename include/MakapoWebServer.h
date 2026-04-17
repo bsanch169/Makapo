@@ -2,25 +2,19 @@
 
 #include <WebServer.h>
 #include "PaddlerDataBuffer.h"
-
+//
 class MakapoWebServer {
 public:
     explicit MakapoWebServer(PaddlerDataBuffer& buffer);
-
-    void begin();
-    void handleClient();
+    void begin();   //starts HTTP server and creates soft WiFi access point
 
 private:
-    WebServer server;
-    PaddlerDataBuffer& dataBuffer;
+    WebServer server;                
+    PaddlerDataBuffer& dataBuffer;  
 
+    void handleClient();
     void handleRoot();
-    void handleSpeed(int paddlerId);
-    void handleLocation(int paddlerId);
-    void handleStrokeRate(int paddlerId);
-    void handleAvgStrokeForce(int paddlerId);
-    void handlePaddlerData(int paddlerId);
-
-    bool validId(int paddlerId);
-    void handleNotFound(String error = "This endpoint doesn't exist");
+    void handleBoatData(uint8_t boatID);
+    void handlePaddlerData(uint8_t boatID, uint8_t paddlerID);
+    void handleNotFound(String string);
 };

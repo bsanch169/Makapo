@@ -15,23 +15,27 @@ struct PaddlerData{
 };
 
 struct BoatData{
-  uint8_t boatId;
-  float speed;     
-  float longitude;
-  float latitude;
+  uint8_t boatID;
   uint8_t paddlerCount;
-  PaddlerData paddlerData[MAX_PADDLERS];
+  uint8_t senStatus;
+  uint8_t boatStatus;
+
+	float coordLat;
+	float coordLon;
+	uint8_t speed;
+	uint16_t videoID;
+
+  PaddlerData paddlers[MAX_PADDLERS];
 };
 
 
 class PaddlerDataBuffer{
 public:
   PaddlerDataBuffer();
-
   bool getLatestBoatData(uint8_t boatId, BoatData& out);
-  bool addBoatData(uint8_t boatId, float speed, float longitude, float latitude, 
-                    PaddlerData *paddlerData, uint8_t paddlerCount);
+  bool addBoatData(BoatData data);
   bool hasData(uint8_t boatId);
+  String printData();
 
 
 private:

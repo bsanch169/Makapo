@@ -3,6 +3,7 @@
 
 # include <cstdint>
 # include <cstddef>
+# include "PaddlerDataBuffer.h"
 
 /* LoRa Packets used are explicit; Header contains CRC & Payload Size
  * 	Header CRC checks size matches expected on receive; 
@@ -90,10 +91,6 @@ struct RawPacket {	/* float - 32 bits (4 bytes); 9 bytes total boatData */
 };
 
 // scaled integers for coord / angle?
-
 uint8_t packHeader(uint8_t boatID, uint8_t pCount, uint8_t senStatus, uint8_t boatStatus);
-RawPacket* allocPacket(uint8_t count);
-void freePacket(RawPacket* p);
-RawPacket* storeData(RawPacket** live, uint8_t* buffer, uint8_t bufSize);
-
+bool storeData(PaddlerDataBuffer* live, uint8_t* buffer, uint8_t bufSize);
 #endif
