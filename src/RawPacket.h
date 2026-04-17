@@ -90,6 +90,14 @@ struct RawPacket {	/* float - 32 bits (4 bytes); 9 bytes total boatData */
 	Paddler paddlers[]; // comment out or just null paddler until sensor team has deliverable
 };
 
+// task shared struct (i was too lazy to create a separate header)
+typedef struct {
+	PaddlerDataBuffer* liveStorage;
+	SemaphoreHandle_t mutex;
+	volatile bool* radioMode;
+} MakapoSharedParams;
+
+
 // scaled integers for coord / angle?
 uint8_t packHeader(uint8_t boatID, uint8_t pCount, uint8_t senStatus, uint8_t boatStatus);
 bool storeData(PaddlerDataBuffer* live, uint8_t* buffer, uint8_t bufSize);

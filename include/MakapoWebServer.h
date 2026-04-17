@@ -1,6 +1,10 @@
 #pragma once
 #include <WebServer.h>
 #include "PaddlerDataBuffer.h"
+#include "RawPacket.h"
+
+
+void handleClientTask(void* pvParameters);
 
 
 class MakapoWebServer {

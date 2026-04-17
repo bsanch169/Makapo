@@ -6,6 +6,18 @@
 const char* ssid = "Makapo";
 const char* password = "123456789";
 
+void handleClientTask(void* pvParameters) {
+    MakapoSharedParams* params = (MakapoSharedParams*)pvParameters;
+
+    MakapoWebServer webServer(*params->liveStorage);
+    webServer.begin();
+
+    while (true) {
+        webServer.handleClient();
+        vTaskDelay(1);
+    }
+}
+
 MakapoWebServer::MakapoWebServer(PaddlerDataBuffer& buffer)
     : server(80), dataBuffer(buffer) {
 }
@@ -52,10 +64,10 @@ void MakapoWebServer::begin() {
   server.begin();
 }
 
-
 void MakapoWebServer::handleClient() {
   server.handleClient();
 }
+
 void MakapoWebServer::handleRoot() {
   server.send(200, "text/plain", "REST API for Makapo");
 }

@@ -11,10 +11,22 @@ void setup() {
   
   webServer.begin();
   Serial.println("Web server started");
-  BoatData data = {};
-  data.boatID = 0;
-  data.paddlerCount = 1;
-  buffer.addBoatData(data);
+  BoatData data0 = {};
+  data0.boatID = 0;
+  data0.paddlerCount = 1;
+  buffer.addBoatData(data0);
+
+  BoatData data1 = {};
+  data1.boatID = 1;
+  data1.paddlerCount = 3;
+  buffer.addBoatData(data1);
+
+  BoatData data2 = {};
+  data2.boatID = 4;
+  data2.paddlerCount = 6;
+  buffer.addBoatData(data2);
+  
+  Serial.println(buffer.toString());
 }
 
 void loop() {

@@ -1,12 +1,11 @@
 # include <RadioLib.h>
 # include <Arduino.h>
-# include <heltec_unofficial.h> //shorthand display/radio init, radiolib functions
-
 # include "RawPacket.h"
+# include "heltec_unofficial.h"
 
 //transmitter initialization
 static float FREQ = 915.0;
-static float BANDWIDTH = 125.0;
+static float BANDWIDTH = 125.0;	
 static uint8_t SPREAD_FACTOR = 9;
 static uint8_t CODE_FACTOR = 7;
 static uint8_t SYNCWORD = 38;
@@ -14,6 +13,7 @@ static uint16_t PREAM_LEN = 8;
 
 //has receive / transmit been completed?
 volatile bool operationDone = false;
+volatile bool txInProgress = false;
 void operationFlag(){ operationDone = true; }
 
 //status code saved after recieve/transmit; if != 0, error occured
@@ -53,7 +53,7 @@ void setup(){
 	radio.setDio1Action(operationFlag); /* interrupt method on radio action completion i.e transmit/receive/etc */
 	
 	if(radioStatus == RADIOLIB_ERR_NONE){
-		//Just transmit one packet for now.	
+		//Just transmit one packet for now	
 		printToDisplay("Generating Random Packet...");
 		payload = prepData();
 		
@@ -66,8 +66,8 @@ void setup(){
 		radioStatus = radio.startTransmit(payload, payloadLen);
 		
 		if(radioStatus == RADIOLIB_ERR_NONE) {
-			printToDisplay("Transmitted Successfully");
-			counter++;
+			printToDisplay("Transmit Started...");
+			txInProgress = true;
 			lastTransmission = millis();
 		}
 		else{
@@ -83,7 +83,7 @@ void loop(){
 	heltec_loop();
 
 	//non-blocking, send a packet at set delay (3 seconds rn)
-	if(millis() - lastTransmission > transmissionDelay){
+	if(!txInProgress && millis() - lastTransmission > transmissionDelay){
 		payload = prepData();
 	
 		if(payload == nullptr){
@@ -92,10 +92,15 @@ void loop(){
 		}
 		size_t payloadLen = getPacketLength();
 		radioStatus = radio.startTransmit(payload, payloadLen);
+
+		if(radioStatus == RADIOLIB_ERR_NONE){
+			txInProgress = true;
+		}
 	}
 
 	if(operationDone){
 		operationDone = false;
+		txInProgress = false;
 		if(radioStatus == RADIOLIB_ERR_NONE){
 			lastTransmission = millis();
 			char tCount[12];
@@ -166,14 +171,16 @@ uint8_t* prepData(){
 		printToDisplay("ERROR: Could not create byte buffer!");
 		return nullptr;
 	}
+	uint8_t boatIDRand = random(0, 10);
+	uint8_t pCountRand = random(1, 4);
 
-	buffer[0] = packHeader(boatID, pCount, senStatus, boatStatus);
+	buffer[0] = packHeader(boatIDRand, pCountRand, senStatus, boatStatus);
 	float coordLat = random(0, 64001) / 10.0f;
 	float coordLon = random(0, 64001) / 10.0f;
 	memcpy(buffer + 1, &coordLat, sizeof(float));
 	memcpy(buffer + 5, &coordLon, sizeof(float));
 	buffer[9] = random(0, 255);
-	memcpy(buffer + 9, &videoID, sizeof(uint16_t));
+	memcpy(buffer + 10, &videoID, sizeof(uint16_t));
 
 	uint8_t offset = 12; 
 	
@@ -183,7 +190,7 @@ uint8_t* prepData(){
 		0011 << 0110 = 6   */
 	uint8_t paddlers = pCount < 1 ? (pCount << 1) + 1 : pCount << 1;
 	for(int i = 0; i < paddlers; i++){
-		buffer[offset++] = random(1,7); //paddler ID
+		buffer[offset++] = i; //paddler ID
 		buffer[offset++] = random(0,255); //paddle angle
 		buffer[offset++] = random(0,255); //paddle velocity
 		buffer[offset++] = random(0,255); //paddle pressure

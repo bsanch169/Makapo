@@ -1,7 +1,9 @@
 # include <RadioLib.h>
 # include <Arduino.h>
 # include <heltec_unofficial.h> //shorthand display/radio init, radiolib functions
+
 # include "RawPacket.h"
+# include "PaddlerDataBuffer.h"
 
 //transmitter initialization
 static float FREQ = 915.0;
@@ -24,10 +26,7 @@ void setupLoRa();
 
 void printToDisplay(const char* a, const char* b = nullptr, const char* c = nullptr);
 
-//live storage & boat tracking
-PaddlerDataBuffer liveStorage;
-
-void setup(){
+void handleRadio(void* pvParameters){
 	heltec_setup();
 	display_start();
 
@@ -39,52 +38,68 @@ void setup(){
 
 	if(radioStatus == RADIOLIB_ERR_NONE){
 		printToDisplay("LoRa init successful!");
+
 		printToDisplay("Listening for Test Packet");
 		radioStatus = radio.startReceive();
 	}
-}
+	
+	// Unpack Task Parameters
+	auto* params = static_cast<MakapoSharedParams*>(pvParameters);
+	PaddlerDataBuffer* liveStorage = params->liveStorage;
+	SemaphoreHandle_t mutex = params->mutex;
+	volatile bool* mode = params->radioMode; //true=trnsmt, false=recv
 
-void loop(){
-	heltec_loop();
-	if(operationDone){
-		operationDone = false;
+	//infinite loop for reception / transmitting modes
+	for(;;){
+		/* Packet Receiving */
+		if(!(*mode) && operationDone){
+			operationDone = false;
 
-		//get length of packet from lora, create rawbyte buffer
-		size_t recvLen = radio.getPacketLength();
-		if(recvLen > 10) {
-			printToDisplay("Data Packet Received...");
-		}
+			//get length of packet from lora, create rawbyte buffer	
+			size_t recvLen = radio.getPacketLength();
+			if(recvLen > 10) {
+				printToDisplay("Data Packet Received...");
+			}
 
-		uint8_t* rawBytes = (uint8_t*)malloc(recvLen);
-		if(rawBytes == nullptr){
-			while(true) { delay(10); }
-		}
+			uint8_t* rawBytes = (uint8_t*)malloc(recvLen);
+			if(rawBytes == nullptr){
+				while(true) { delay(10); }
+			}
 
-		//receive and store into raw byte buffer
-		if(radio.readData(rawBytes, recvLen) == RADIOLIB_ERR_NONE){
-			uint8_t header = rawBytes[0];
-			if(!liveStorage.hasData((header >> 4) & 0x0F)){
-				printToDisplay("New Boat Connection!", "Unpacking...");
+			//receive and store into raw byte buffer
+			if(radio.readData(rawBytes, recvLen) == RADIOLIB_ERR_NONE){
+				Serial.println("Recieved");
+				uint8_t header = rawBytes[0];
+				
+				// take mutex to store / update data
+				xSemaphoreTake(mutex, portMAX_DELAY);
+
+				if(!liveStorage->hasData((header >> 4) & 0x0F)){
+					printToDisplay("New Boat Connection!", "Unpacking...");
+				}
+				else{
+					int value = rawBytes[1];
+					char buf[12];
+					printToDisplay("Packet Received", itoa(value, buf, 10));
+				}
+				bool success = storeData(liveStorage, rawBytes, recvLen);
+				if(!success) while(true) { delay(10); }
+				
+				xSemaphoreGive(mutex);
+
 			}
 			else{
-				int value = rawBytes[1];
-				char buf[12];
-				printToDisplay("Packet Received", itoa(value, buf, 10));
+				printToDisplay("Error reading packet!");
+				while(true) { delay(10); }
 			}
-			bool success = storeData(&liveStorage, rawBytes, recvLen);
-			Serial.println(success);
-			if(!success) while(true) { delay(10); }
+			free(rawBytes);
+			radioStatus = radio.startReceive();
 		}
-		else{
-			printToDisplay("Error reading packet!");
-			while(true) { delay(10); }
-		}
-		free(rawBytes);
-		radioStatus = radio.startReceive();
-		Serial.println(liveStorage.toString());
+
+		/* Packet Transmitting (Unimplemented) */
+		if(mode){}
 	}
 }
-
 void printToDisplay(const char* a, const char* b, const char* c){
 	display.clear();
 	display.setFont(ArialMT_Plain_10);
@@ -126,14 +141,4 @@ void display_start(){
 	display.clear();
 	display.display();
 }
-
-	/* Should allocate the space for 10 buffers corresponding 
-	 * to per-boat packet sizes; But realistically, we only get location 	 * data at the moment (no paddle sensor deliverable) and we're not 
-	 * doing historical data or calculations so we'll simply have 10 max sized Packet Structs that are going to be updated on a receive; 
-	 * [Packet Collisions and Access between Tasks to build later]
-	 */
-	
-	/* has to be an array of pointers, pointing to packets of certain size; on reception, the space will be allocated, index tied to boatID, and updated accordingly */
-
-	/* or can be preallocated memory pool of each slot max size, but i don't wanna deal with memory stuff rn tbh */
 
