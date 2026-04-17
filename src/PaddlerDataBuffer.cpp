@@ -27,7 +27,7 @@ bool PaddlerDataBuffer::getLatestBoatData(uint8_t boatId, BoatData& out) {
   return true;
 }
 
-String PaddlerDataBuffer::printData() {
+String PaddlerDataBuffer::toString() {
   String out = "";
 
   for (int i = 0; i < MAX_CANOES; i++) {
@@ -47,7 +47,10 @@ String PaddlerDataBuffer::printData() {
     out += String(b.videoID);
     out += "\n";
 
-    for (int j = 0; j < b.paddlerCount; j++) {
+    int count = b.paddlerCount;
+    if (count > MAX_PADDLERS) count = MAX_PADDLERS;
+
+    for (int j = 0; j < count; j++) {
       PaddlerData& p = b.paddlers[j];
 
       out += "  Paddler ";

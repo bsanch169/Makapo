@@ -1,32 +1,22 @@
 #include <Arduino.h>
 #include <WiFi.h>
-//#include "MakapoWebServer.h"
-//#include "PaddlerDataBuffer.h"
-//#include "heltec_unofficial.h"
+#include "MakapoWebServer.h"
+#include "PaddlerDataBuffer.h"
 
-const char* ssid = "Makapo";
-const char* password = "123456789";
-
-//PaddlerDataBuffer buffer;
-//MakapoWebServer webServer(buffer);
+PaddlerDataBuffer buffer;
+MakapoWebServer webServer(buffer);
 
 void setup() {
   Serial.begin(115200);
-
-  bool result = WiFi.softAP(ssid, password);
-
-  if (result) {
-    Serial.println("Soft AP started successfully");
-    Serial.print("AP IP address: ");
-    Serial.println(WiFi.softAPIP());
-  } else {
-    Serial.println("Soft AP failed to start");
-  }
-
-  //webServer.begin();
+  
+  webServer.begin();
   Serial.println("Web server started");
+  BoatData data = {};
+  data.boatID = 0;
+  data.paddlerCount = 1;
+  buffer.addBoatData(data);
 }
 
 void loop() {
-  
+  webServer.handleClient();
 }

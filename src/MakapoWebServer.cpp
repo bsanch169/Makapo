@@ -3,6 +3,9 @@
 #include <ArduinoJson.h>
 #include <uri/UriBraces.h>
 
+const char* ssid = "Makapo";
+const char* password = "123456789";
+
 MakapoWebServer::MakapoWebServer(PaddlerDataBuffer& buffer)
     : server(80), dataBuffer(buffer) {
 }
@@ -10,42 +13,41 @@ MakapoWebServer::MakapoWebServer(PaddlerDataBuffer& buffer)
 void MakapoWebServer::begin() {
   server.on("/", HTTP_GET, [this]() { handleRoot(); });
 
-  // {boatId}/{boatData}
-  server.on(UriBraces("{}/{}"), HTTP_GET, [this]() {
+  // {boatId}/
+  server.on(UriBraces("/{}"), HTTP_GET, [this]() {
+    Serial.println("Boat endpoint hit");
     uint8_t boatID = server.pathArg(0).toInt();
-    String dataRequested = server.pathArg(1);
 
     if (!dataBuffer.hasData(boatID)) {
       handleNotFound("Invalid Boat ID, or no data from this boat yet");
       return;
     } 
 
-    if (dataRequested == "boatData") {
-      handleBoatData(boatID);
-    }
-    else {
-      handleNotFound("This endpoint doesn't exist");
-    }
+    handleBoatData(boatID);
   });
 
-  // /{boatId}//{paddlerId}/{paddlerData}
-  server.on(UriBraces("{}/{}/{}"), HTTP_GET, [this]() {
+  // /{boatId}//{paddlerId}
+  server.on(UriBraces("/{}/{}"), HTTP_GET, [this]() {
     uint8_t boatID = server.pathArg(0).toInt();
-    String dataRequested = server.pathArg(1);
-    uint8_t paddlerID = server.pathArg(2).toInt();
+    uint8_t paddlerID = server.pathArg(1).toInt();
 
     if (!dataBuffer.hasData(boatID)) {
       handleNotFound("Invalid Boat ID, or no data from this boat yet");
       return;
     }
 
-    if (dataRequested == "paddlerData") {
-      handlePaddlerData(boatID, paddlerID);
-    }
-    else {
-      handleNotFound("The endpoint " + dataRequested + " doesn't exist");
-    }
+    handlePaddlerData(boatID, paddlerID);
   });
+
+  bool result = WiFi.softAP(ssid, password);
+
+  if (result) {
+    Serial.println("Soft AP started successfully");
+    Serial.print("AP IP address: ");
+    Serial.println(WiFi.softAPIP());
+  } else {
+    Serial.println("Soft AP failed to start");
+  }
 
   server.begin();
 }

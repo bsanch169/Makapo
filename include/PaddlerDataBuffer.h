@@ -35,7 +35,7 @@ public:
   bool getLatestBoatData(uint8_t boatId, BoatData& out);
   bool addBoatData(BoatData data);
   bool hasData(uint8_t boatId);
-  String printData();
+  String toString();
 
 
 private:
