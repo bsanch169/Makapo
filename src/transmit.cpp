@@ -14,6 +14,7 @@ static uint16_t PREAM_LEN = 8;
 
 //has receive / transmit been completed?
 volatile bool operationDone = false;
+volatile bool txInProgress = false;
 void operationFlag(){ operationDone = true; }
 
 //status code saved after recieve/transmit; if != 0, error occured
@@ -53,7 +54,7 @@ void setup(){
 	radio.setDio1Action(operationFlag); /* interrupt method on radio action completion i.e transmit/receive/etc */
 	
 	if(radioStatus == RADIOLIB_ERR_NONE){
-		//Just transmit one packet for now.	
+		//Just transmit one packet for now	
 		printToDisplay("Generating Random Packet...");
 		payload = prepData();
 		
@@ -66,8 +67,8 @@ void setup(){
 		radioStatus = radio.startTransmit(payload, payloadLen);
 		
 		if(radioStatus == RADIOLIB_ERR_NONE) {
-			printToDisplay("Transmitted Successfully");
-			counter++;
+			printToDisplay("Transmit Started...");
+			txInProgress = true;
 			lastTransmission = millis();
 		}
 		else{
@@ -83,7 +84,7 @@ void loop(){
 	heltec_loop();
 
 	//non-blocking, send a packet at set delay (3 seconds rn)
-	if(millis() - lastTransmission > transmissionDelay){
+	if(!txInProgress && millis() - lastTransmission > transmissionDelay){
 		payload = prepData();
 	
 		if(payload == nullptr){
@@ -92,10 +93,15 @@ void loop(){
 		}
 		size_t payloadLen = getPacketLength();
 		radioStatus = radio.startTransmit(payload, payloadLen);
+
+		if(radioStatus == RADIOLIB_ERR_NONE){
+			txInProgress = true;
+		}
 	}
 
 	if(operationDone){
 		operationDone = false;
+		txInProgress = false;
 		if(radioStatus == RADIOLIB_ERR_NONE){
 			lastTransmission = millis();
 			char tCount[12];
@@ -173,7 +179,7 @@ uint8_t* prepData(){
 	memcpy(buffer + 1, &coordLat, sizeof(float));
 	memcpy(buffer + 5, &coordLon, sizeof(float));
 	buffer[9] = random(0, 255);
-	memcpy(buffer + 9, &videoID, sizeof(uint16_t));
+	memcpy(buffer + 10, &videoID, sizeof(uint16_t));
 
 	uint8_t offset = 12; 
 	
