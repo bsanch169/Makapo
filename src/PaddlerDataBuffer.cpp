@@ -5,6 +5,8 @@ PaddlerDataBuffer::PaddlerDataBuffer() {
   for (size_t i = 0; i < MAX_CANOES; ++i) {
     hasLatest[i] = false;
   }
+
+  pendingMsg = {};
 }
 
 bool PaddlerDataBuffer::hasData(uint8_t boatId) {
@@ -13,10 +15,25 @@ bool PaddlerDataBuffer::hasData(uint8_t boatId) {
 }
 
 bool PaddlerDataBuffer::addBoatData(BoatData data) {
-  if(data.boatID > MAX_CANOES) return false;
+  if(data.boatID >= MAX_CANOES) return false;
 
   latestState[data.boatID] = data;
   hasLatest[data.boatID] = true;
+  return true;
+}
+
+bool PaddlerDataBuffer::addMessage(Message msg) {
+  if(msg.boatID >= MAX_CANOES) return false;
+  pendingMsg = msg;
+  return true;
+}
+
+bool PaddlerDataBuffer::getMessage(Message& buf) {
+  buf.boatID = pendingMsg.boatID;
+  buf.messageID = pendingMsg.messageID;
+  buf.messageLen = pendingMsg.messageLen;
+  buf.message = pendingMsg.message;
+
   return true;
 }
 
@@ -67,6 +84,13 @@ String PaddlerDataBuffer::toString() {
     }
     out += "\n";
   }
+  String currentMsg = pendingMsg.message;
 
+  if(currentMsg == ""){
+    out += pendingMsg.messageID;
+  }else{
+    out += currentMsg;
+  }
+  out += "\n";
   return out;
 }

@@ -1,7 +1,6 @@
 #pragma once
 #include <stddef.h>
 
-//The type we will use is a PaddlerData struct
 template <typename T, size_t capacity>
 class RingBuffer {
   static_assert(capacity > 0, "RingBuffer capacity must be > 0");

@@ -20,7 +20,7 @@ void operationFlag(){ operationDone = true; }
 int radioStatus = RADIOLIB_ERR_NONE;
 
 //assuming hardcoded data like boatID and paddlerCount
-uint8_t boatID = 1;
+uint8_t boatID = 2;
 uint8_t pCount = 3; //mode, so 0=1, 1=2, 2=4, 3=6
 uint8_t senStatus = 0;
 uint8_t boatStatus = 0;
@@ -171,10 +171,8 @@ uint8_t* prepData(){
 		printToDisplay("ERROR: Could not create byte buffer!");
 		return nullptr;
 	}
-	uint8_t boatIDRand = random(0, 10);
-	uint8_t pCountRand = random(1, 4);
 
-	buffer[0] = packHeader(boatIDRand, pCountRand, senStatus, boatStatus);
+	buffer[0] = packHeader(boatID, pCount, senStatus, boatStatus);
 	float coordLat = random(0, 64001) / 10.0f;
 	float coordLon = random(0, 64001) / 10.0f;
 	memcpy(buffer + 1, &coordLat, sizeof(float));

@@ -1,0 +1,324 @@
+# include <RadioLib.h>
+# include <Arduino.h>
+# include "RawPacket.h"
+# include "heltec_unofficial.h"
+
+//transmitter initialization
+static float FREQ = 915.0;
+static float BANDWIDTH = 125.0;	
+static uint8_t SPREAD_FACTOR = 9;
+static uint8_t CODE_FACTOR = 7;
+static uint8_t SYNCWORD = 38;
+static uint16_t PREAM_LEN = 8;
+
+ 
+
+//has receive / transmit been completed?
+volatile bool operationDone = false;
+volatile bool txInProgress = false;
+volatile bool rxInProgress = false;
+
+
+void operationFlag(){ operationDone = true; }
+
+//status code saved after recieve/transmit; if != 0, error occured
+int radioStatus = RADIOLIB_ERR_NONE;
+
+//assuming hardcoded data like boatID and paddlerCount
+uint8_t boatID = 0;
+uint8_t pCount = 3; //mode, so 0=1, 1=2, 2=4, 3=6
+uint8_t senStatus = 0;
+uint8_t boatStatus = 0;
+uint16_t videoID = 999;
+
+//testing: send a packet every second
+long transmissionDelay = 10000; //in ms
+long lastTransmission = 0;
+uint8_t counter = 0;
+uint8_t* payload;
+
+//function prototypes
+void display_start();
+void setupLoRa();
+void printToDisplay(const char* a, const char* b = nullptr, const char* c = nullptr);
+uint8_t* prepData();
+size_t getPacketLength();
+void initRandomSeed();
+
+void setup(){
+	heltec_setup();
+	display_start();
+	initRandomSeed(); //from RawPackets.cpp
+
+	printToDisplay("Board setup success, setting up LoRa...");
+
+	setupLoRa();
+	radio.explicitHeader(); /* Sets explicit header for packets (usually default but just in case) */
+	radio.setCRC(2); /* Sets 2 byte payload CRC for packet */
+	radio.setDio1Action(operationFlag); /* interrupt method on radio action completion i.e transmit/receive/etc */
+	
+	if(radioStatus == RADIOLIB_ERR_NONE){
+		//Just transmit one packet for now	
+		printToDisplay("Generating Random Packet...");
+		payload = prepData();
+		
+		if(payload == nullptr){
+			printToDisplay("ERROR: Could not generate data!");
+			while(true) { delay(10); }
+		}
+
+		size_t payloadLen = getPacketLength();
+		radioStatus = radio.startTransmit(payload, payloadLen);
+		
+		if(radioStatus == RADIOLIB_ERR_NONE) {
+			printToDisplay("Transmit Started...");
+			txInProgress = true;
+			lastTransmission = millis();
+		}
+		else{
+			char errBuf[16];
+			snprintf(errBuf, sizeof(errBuf), "%d", radioStatus);
+			printToDisplay("Transmission could not start properly: ", errBuf);
+			while(true) { delay(10); }
+		}
+	}
+}
+
+void loop(){
+	heltec_loop();
+    /*If there is no operation in progress:
+        -Start transmit if transmission delay passed
+        -Else listen for packets*/
+
+    bool transmitDelayElapsed = millis() - lastTransmission > transmissionDelay;
+
+    /*
+    Start an operation if:
+        -there is no tx in progress AND 
+        -theres no rx in progress OR delay passed
+    */ 
+
+    if(!txInProgress && (!rxInProgress || transmitDelayElapsed)){
+        //If delay elapsed, we start a transmit. Else a recieve
+        if(transmitDelayElapsed){
+            rxInProgress = false;
+            payload = prepData();
+    
+            if(payload == nullptr){
+                printToDisplay("ERROR: Transmission Data Could Not be Generated!");
+                while(true) { delay(10); } 
+            }
+            size_t payloadLen = getPacketLength();
+            radioStatus = radio.startTransmit(payload, payloadLen);
+
+            if(radioStatus == RADIOLIB_ERR_NONE){
+                txInProgress = true;
+
+            }else{
+                char errBuf[16];
+                snprintf(errBuf, sizeof(errBuf), "%d", radioStatus);
+                printToDisplay("Error during transmission:", errBuf);
+                while(true) { delay(10); }
+            }
+            
+        }else{
+            radioStatus = radio.startReceive();
+            if(radioStatus == RADIOLIB_ERR_NONE){
+                rxInProgress = true;
+            }else{
+                char errBuf[16];
+                snprintf(errBuf, sizeof(errBuf), "%d", radioStatus);
+                printToDisplay("Error during recieve operation:", errBuf);
+                while(true) { delay(10); }
+            }
+        }
+    }
+
+    if(operationDone){
+		operationDone = false;
+
+        // If true, the operation was a transmission. Else it was a recieve
+        if(txInProgress){
+            txInProgress = false;
+            lastTransmission = millis();
+            char tCount[12];
+            snprintf(tCount, sizeof(tCount), "%u", ++counter);
+            printToDisplay("Transmit Count: ", tCount);
+            free(payload);
+
+		}else{
+            rxInProgress = false;
+
+            size_t recvLen = radio.getPacketLength();
+            uint8_t* rawBytes = (uint8_t*)malloc(recvLen);
+
+            if(rawBytes == nullptr){
+                printToDisplay("Bad Packet");
+                while(true) { delay(10); }
+            }
+
+            /* Bytes in message packet correspond to the following fields:
+                Byte[0]: 
+                    -Boat ID (4 bits)
+                    -Message ID (4 bits) (0000 = custom message)
+
+                --If preset message, we don't read the rest--
+
+                Byte[1]: Message Length
+                Byte[2-end]: Custom Message
+            */
+            radioStatus = radio.readData(rawBytes, recvLen);
+            if(radioStatus == RADIOLIB_ERR_NONE){
+                if (recvLen < 1) {
+                    printToDisplay("Missing Packet Header");
+                    free(rawBytes);
+                    return;
+                }
+                // Byte[0]
+                uint8_t header = rawBytes[0];
+                uint8_t msgBoatID = (header >> 4) & 0x0F;
+
+                if(msgBoatID != boatID){
+                    free(rawBytes);
+                    rawBytes = nullptr;
+                    return;
+                }
+                uint8_t messageID = header & 0x0F;
+
+                // Print immediately if preset message
+                if (messageID != 0) {
+                    char messageIDBuf[4];
+                    snprintf(messageIDBuf, sizeof(messageIDBuf), "%u", messageID);
+                    printToDisplay("Preset Message ", messageIDBuf);
+
+                // Custom message
+                }else {
+                    if (recvLen < 2) {
+                        printToDisplay("Missing message length");
+                        free(rawBytes);
+                        return;
+                    }
+                    uint8_t messageLen = rawBytes[1];
+
+                    /* Check if messageLen matches actual message bytes recieved
+                    if (messageLen > 40 || messageLen != recvLen - 2) {
+                        printToDisplay("Bad Packet", "Invalid message length");
+                        free(rawBytes);
+                        rawBytes = nullptr;
+                        return;
+                    }else{
+                    //Print message
+                    }   */
+                    char messageBuf[messageLen + 1];
+
+                    for (uint8_t i = 0; i < messageLen; i++) {
+                        messageBuf[i] = (char)rawBytes[2 + i];
+                    }
+                    messageBuf[messageLen] = '\0';
+                    printToDisplay("Custom Message: ", messageBuf);
+                }
+                free(rawBytes);
+                rawBytes = nullptr;
+
+            }else{
+                char errBuf[16];
+                snprintf(errBuf, sizeof(errBuf), "%d", radioStatus);
+                printToDisplay("Error during reading of packet:", errBuf);
+                while(true) { delay(10); }
+            }
+        }
+	}
+}
+
+void printToDisplay(const char* a, const char* b, const char* c){
+	display.clear();
+	display.setFont(ArialMT_Plain_16);
+	display.setTextAlignment(TEXT_ALIGN_LEFT);
+	int x = 0;
+	int y = 0; 
+	int lineH = 12;
+
+	display.drawString(x, y, a); y += lineH;
+    if (b) {
+        display.drawString(x, y, b);
+        y += lineH;
+    }
+    if (c) {
+        display.drawString(x, y, c);
+        y += lineH;
+    }
+
+	display.display();
+
+}
+
+void setupLoRa(){
+	radioStatus = radio.begin(FREQ, BANDWIDTH, SPREAD_FACTOR, CODE_FACTOR, SYNCWORD, PREAM_LEN);
+
+	if(radioStatus == RADIOLIB_ERR_NONE){
+		printToDisplay("LoRa Init Success");
+	}
+	else{
+		char errBuf[16];
+		snprintf(errBuf, sizeof(errBuf), "%d", radioStatus);
+		printToDisplay("LoRa Failure: ", errBuf);
+
+		while(true) { delay(10); }
+	}
+}
+
+void display_start(){
+	//heltec_setup sets up display, this provides it power and initalizes it
+	pinMode(Vext, OUTPUT); 
+	digitalWrite(Vext, LOW);
+	delay(50);
+
+	display.init();
+	display.flipScreenVertically();
+	display.clear();
+	display.display();
+}
+
+uint8_t* prepData(){
+	//make buffer 
+	size_t len = getPacketLength();
+	uint8_t* buffer = (uint8_t*)malloc(len);	
+	if(buffer == nullptr) {
+		heltec_led(30);
+		printToDisplay("ERROR: Could not create byte buffer!");
+		return nullptr;
+	}
+
+	buffer[0] = packHeader(boatID, pCount, senStatus, boatStatus);
+	float coordLat = random(0, 64001) / 10.0f;
+	float coordLon = random(0, 64001) / 10.0f;
+	memcpy(buffer + 1, &coordLat, sizeof(float));
+	memcpy(buffer + 5, &coordLon, sizeof(float));
+	buffer[9] = random(0, 255);
+	memcpy(buffer + 10, &videoID, sizeof(uint16_t));
+
+	uint8_t offset = 12; 
+	/* 	0000 + 1 = 1
+		0001 << 0010 = 2
+		0010 << 0100 = 4
+		0011 << 0110 = 6   */
+	uint8_t paddlers = pCount < 1 ? (pCount << 1) + 1 : pCount << 1;
+
+	for(int i = 0; i < paddlers; i++){
+		buffer[offset++] = i; //paddler ID
+		buffer[offset++] = random(0,255); //paddle angle
+		buffer[offset++] = random(0,255); //paddle velocity
+		buffer[offset++] = random(0,255); //paddle pressure
+		buffer[offset++] = random(0,255); //strokerate
+	}
+	return buffer;
+}
+
+size_t getPacketLength(){
+	uint8_t paddlers = pCount < 1 ? (pCount << 1) + 1 : pCount << 1;
+	return 12 + (size_t)paddlers * 5; // header + boatdata + count * 5
+}
+
+void initRandomSeed(){
+	randomSeed(esp_random() ^ millis() ^ micros());
+}

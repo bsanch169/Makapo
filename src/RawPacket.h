@@ -90,6 +90,9 @@ struct RawPacket {	/* float - 32 bits (4 bytes); 9 bytes total boatData */
 	Paddler paddlers[]; // comment out or just null paddler until sensor team has deliverable
 };
 
+
+
+
 // task shared struct (i was too lazy to create a separate header)
 typedef struct {
 	PaddlerDataBuffer* liveStorage;
