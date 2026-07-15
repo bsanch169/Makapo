@@ -30,7 +30,7 @@ const char* password = "123456789";
 void MakapoWebServer::begin() {
   server.on("/", HTTP_GET, [this]() { handleRoot(); });
 
-  // {boatId}/
+  // {boatId}
   server.on(UriBraces("/{}"), HTTP_GET, [this]() {
     Serial.println("Boat endpoint hit");
     uint8_t boatID = server.pathArg(0).toInt();
@@ -43,7 +43,7 @@ void MakapoWebServer::begin() {
     handleBoatData(boatID);
   });
 
-  // /{boatId}//{paddlerId}
+  // /{boatId}/{paddlerId}
   server.on(UriBraces("/{}/{}"), HTTP_GET, [this]() {
     uint8_t boatID = server.pathArg(0).toInt();
     uint8_t paddlerID = server.pathArg(1).toInt();
